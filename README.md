@@ -5,7 +5,7 @@
 ---
 
 ## 🔗 Verified Deployments & Telemetry Links
-- **GenLayer Explorer Contract**: [`0x7716A61817e99923722B01455f0885f1B9E438De`](https://explorer-studio.genlayer.com/address/0x7716A61817e99923722B01455f0885f1B9E438De)
+- **GenLayer Explorer Contract**: [`0x0B51fbab587280f844BD3C926B28da13ea1b7251`](https://explorer-studio.genlayer.com/address/0x0B51fbab587280f844BD3C926B28da13ea1b7251)
 - **GitHub Repository**: [`https://github.com/tumhi4/slashing-guard`](https://github.com/tumhi4/slashing-guard) *(or user account)*
 - **Authoritative Consensus Layer REST Endpoints (Zero Mock Cheats)**:
   - Ethereum Mainnet Beacon Validator #0 (Genesis Validator): [`https://ethereum-beacon-api.publicnode.com/eth/v1/beacon/states/head/validators/0`](https://ethereum-beacon-api.publicnode.com/eth/v1/beacon/states/head/validators/0)
