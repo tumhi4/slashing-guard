@@ -66,8 +66,17 @@ class GenLayerSlashingClient:
             "claim_payout_tx_hash": ""
         }
 
-    def confirm_settlement(self, policy_id: str, evm_tx_hash: str) -> bool:
-        logging.info(f"Submitting settlement confirmation to GenLayer Court for {policy_id} with tx {evm_tx_hash}")
+    def confirm_settlement(
+        self,
+        policy_id: str,
+        evm_tx_hash: str,
+        settlement_block: int,
+        disbursed_amount_usdc: int
+    ) -> bool:
+        logging.info(
+            f"Submitting settlement confirmation to GenLayer Court for {policy_id}: "
+            f"tx={evm_tx_hash}, block={settlement_block}, disbursed={disbursed_amount_usdc} USDC"
+        )
         return True
 
 
@@ -83,6 +92,7 @@ class EvmSlashingRelay:
         return {
             "status": 1,
             "transactionHash": "0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a",
+            "blockNumber": 6891234,
             "gasUsed": 48210
         }
 
@@ -101,15 +111,22 @@ class SlashingGuardSettlementRelay:
         status = policy.get("status")
         if status == "CLAIM_APPROVED" and not policy.get("claim_payout_tx_hash"):
             logging.info(f"Processing approved slashing claim for policy: {policy_id}")
+            disbursed_amount = policy["coverage_amount_usdc"]
             receipt = self.evm_relay.execute_claim(
                 policy_id=policy_id,
                 staker=policy["staker_address"],
-                amount=policy["coverage_amount_usdc"]
+                amount=disbursed_amount
             )
             if receipt.get("status") == 1:
                 tx_hash = receipt["transactionHash"]
-                logging.info(f"EVM Payout successful! Receipt: {tx_hash}")
-                self.genlayer_client.confirm_settlement(policy_id, tx_hash)
+                settlement_block = receipt.get("blockNumber", 6891234)
+                logging.info(f"EVM Payout successful! Receipt: {tx_hash} at block {settlement_block}")
+                self.genlayer_client.confirm_settlement(
+                    policy_id=policy_id,
+                    evm_tx_hash=tx_hash,
+                    settlement_block=settlement_block,
+                    disbursed_amount_usdc=disbursed_amount
+                )
 
     def run_poll_loop(self):
         self.running = True

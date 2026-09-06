@@ -1,0 +1,16 @@
+2026-09-07 00:50:43,118 [INFO] [SlashingGuardRelay] Processing approved slashing claim for policy: POLICY_001
+2026-09-07 00:50:43,118 [INFO] [SlashingGuardRelay] Broadcasting executeSlashingPayout to EVM Vault for POLICY_001: 1000 USDC -> 0x9014DF05Fa3C62Ea443775B4D4b7f26853F4C9e9
+2026-09-07 00:50:43,118 [INFO] [SlashingGuardRelay] EVM Payout successful! Receipt: 0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a at block 6891234
+2026-09-07 00:50:43,118 [INFO] [SlashingGuardRelay] Submitting settlement confirmation to GenLayer Court for POLICY_001: tx=0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a, block=6891234, disbursed=1000 USDC
+2026-09-07 00:50:55,957 [INFO] [SlashingGuardRelay] Processing approved slashing claim for policy: POLICY_001
+2026-09-07 00:50:55,957 [INFO] [SlashingGuardRelay] Broadcasting executeSlashingPayout to EVM Vault for POLICY_001: 1000 USDC -> 0x9014DF05Fa3C62Ea443775B4D4b7f26853F4C9e9
+2026-09-07 00:50:55,957 [INFO] [SlashingGuardRelay] EVM Payout successful! Receipt: 0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a at block 6891234
+2026-09-07 00:50:55,957 [INFO] [SlashingGuardRelay] Submitting settlement confirmation to GenLayer Court for POLICY_001: tx=0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a, block=6891234, disbursed=1000 USDC
+2026-09-07 01:02:07,854 [INFO] [SlashingGuardRelay] Processing approved slashing claim for policy: POLICY_001
+2026-09-07 01:02:07,855 [INFO] [SlashingGuardRelay] Broadcasting executeSlashingPayout to EVM Vault for POLICY_001: 1000 USDC -> 0x9014DF05Fa3C62Ea443775B4D4b7f26853F4C9e9
+2026-09-07 01:02:07,856 [INFO] [SlashingGuardRelay] EVM Payout successful! Receipt: 0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a at block 6891234
+2026-09-07 01:02:07,856 [INFO] [SlashingGuardRelay] Submitting settlement confirmation to GenLayer Court for POLICY_001: tx=0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a, block=6891234, disbursed=1000 USDC
+2026-09-07 01:02:16,794 [INFO] [SlashingGuardRelay] Processing approved slashing claim for policy: POLICY_001
+2026-09-07 01:02:16,795 [INFO] [SlashingGuardRelay] Broadcasting executeSlashingPayout to EVM Vault for POLICY_001: 1000 USDC -> 0x9014DF05Fa3C62Ea443775B4D4b7f26853F4C9e9
+2026-09-07 01:02:16,795 [INFO] [SlashingGuardRelay] EVM Payout successful! Receipt: 0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a at block 6891234
+2026-09-07 01:02:16,795 [INFO] [SlashingGuardRelay] Submitting settlement confirmation to GenLayer Court for POLICY_001: tx=0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a, block=6891234, disbursed=1000 USDC
