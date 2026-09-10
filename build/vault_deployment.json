@@ -1,0 +1,9 @@
+{
+  "chain_id": 84532,
+  "rpc_url": "https://sepolia.base.org",
+  "vault_address": "0x3Fa9b23f81902c34918239482910394817e12a89",
+  "authorized_relay": "0x3A78BDA3779a99780806d7F23EF4854535567658",
+  "owner": "0x3A78BDA3779a99780806d7F23EF4854535567658",
+  "status": "PENDING_FUNDING",
+  "account": "0x3A78BDA3779a99780806d7F23EF4854535567658"
+}

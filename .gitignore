@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Next.js Build Output
+.next/
+*/.next/
+out/
+*/out/
+
+# Python Cache & Testing
+.coverage
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+slashingguard_relay.log
+
+# Environment Files
+.env
+.env*.local
+
+# IDE & OS Metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

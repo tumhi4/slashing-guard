@@ -1,0 +1,11 @@
+{
+  "contract_address": "0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693",
+  "deployer": "0x3A78BDA3779a99780806d7F23EF4854535567658",
+  "authorized_relay": "0x3A78BDA3779a99780806d7F23EF4854535567658",
+  "operator": "0x3A78BDA3779a99780806d7F23EF4854535567658",
+  "rpc_url": "https://studio.genlayer.com/api",
+  "explorer_url": "https://explorer-studio.genlayer.com/address/0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693",
+  "tx_hash": "0x4781049966b70c1e88a47878044d5ccd121f8f13ce6515047babfeae6a0ccad8",
+  "status": "DEPLOYED_ACTIVE",
+  "timestamp": "2026-09-10T14:51:14.773Z"
+}

@@ -1,6 +1,6 @@
 ﻿import { createClient, createAccount } from '../../AetherDungeon/frontend/node_modules/genlayer-js/dist/index.js';
 
-const CONTRACT_ADDRESS = '0x0B51fbab587280f844BD3C926B28da13ea1b7251';
+const CONTRACT_ADDRESS = '0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693';
 const RPC_ENDPOINT = 'https://studio.genlayer.com/api';
 
 async function testLiveContract() {

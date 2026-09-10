@@ -1,0 +1,26 @@
+{
+  "name": "slashingguard",
+  "version": "1.0.0",
+  "description": "SlashingGuard: Autonomous Ethereum PoS Validator Slashing Insurance Protocol on GenLayer",
+  "type": "module",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm run start",
+    "relay": "node relay/SlashingGuardRelay.mjs",
+    "relay:once": "node relay/SlashingGuardRelay.mjs --once",
+    "test:live": "node scripts/test_live_e2e_full.mjs",
+    "test:unit": "python test/test_slashing_lifecycle.py"
+  },
+  "keywords": [
+    "genlayer",
+    "slashing",
+    "ethereum",
+    "insurance",
+    "validator",
+    "beacon-chain",
+    "ai-consensus"
+  ],
+  "author": "SlashingGuard Security Core",
+  "license": "MIT"
+}

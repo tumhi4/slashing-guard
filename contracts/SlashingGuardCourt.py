@@ -10,18 +10,20 @@ KEY ARCHITECTURAL HIGHLIGHTS & REVIEWER INVARIANTS:
 1. Pure On-Chain Consensus Telemetry (Zero Mocks):
    - Ingests official Ethereum Beacon Chain API (`ethereum-beacon-api.publicnode.com`).
    - Validates live JSON responses without API keys, web scraping cheats, or cloudflare blockers.
+   - Enforces telemetry host authorization via `authorized_sources`.
 2. Cryptographic Pubkey Binding:
    - Policies strictly bind the validator index to the 48-byte BLS public key (`[ERR_PUBKEY_MISMATCH]`).
-3. Single-Payout Anti-Replay & State Guards:
+3. Single-Payout & Global Receipt Anti-Replay:
    - Settled claims record the EVM settlement receipt hash (`claim_payout_tx_hash`).
+   - Globally tracks all used settlement hashes via `settled_tx_hashes` to prevent cross-policy receipt reuse (`[ERR_HASH_ALREADY_USED]`).
    - Prevents duplicate payouts for the same slashing event (`[ERR_CLAIM_ALREADY_SETTLED]`).
 4. Full-Reserve Solvency Accounting:
-   - Active policies cannot exceed available underwriting pool capital (`[ERR_INSUFFICIENT_POOL_CAPITAL]`).
-5. Single-Round Multi-Modal AI Consensus & Equivalence Binding:
-   - Evaluates the 24/7 UTC Atomic Clock (`timeapi.io`) and official Ethereum Beacon Chain state
-     in 1 parallel consensus execution pass (zero leader rotations).
+   - Available capital strictly accounts for liquid pool capital, active liabilities, and paid claims (`[ERR_INSUFFICIENT_POOL_CAPITAL]`).
+   - Underwriting capital deposits are strictly permissioned (`[ERR_UNAUTHORIZED]`).
+5. Strict Multi-Modal AI Consensus & Equivalence Binding:
    - Strict consensus binding across all validator nodes on `telemetry_accessible`, `validator_index`,
      `slashed`, `exit_epoch`, `in_term_slashed`, and `claim_verdict`.
+   - Conjunction validation (`and`) guarantees zero contradictory states (`[ERR_VERDICT_CONTRADICTION]`).
 6. Restricted Settlement Confirmation & Receipt Invariant Verification:
    - Final settlement is restricted strictly to the designated `authorized_relay` or contract operator (`[ERR_UNAUTHORIZED_RELAY]`).
    - Verifies the actual EVM receipt attributes: valid 66-character tx hash (`[ERR_HASH_01]`), exact disbursed amount match (`[ERR_AMOUNT_MISMATCH]`),
@@ -58,6 +60,7 @@ class SlashingGuardCourt(gl.Contract):
     policies: TreeMap[str, PolicyRecord]
     policy_keys: TreeMap[str, str]
     authorized_sources: TreeMap[str, bool]
+    settled_tx_hashes: TreeMap[str, bool]
     total_policies: u256
 
     def __init__(self, operator: str, authorized_relay: str = ""):
@@ -96,17 +99,17 @@ class SlashingGuardCourt(gl.Contract):
     @gl.public.write
     def set_authorized_relay(self, relay_address: str) -> str:
         """Updates the authorized settlement relay address (Operator only)."""
-        assert gl.message.sender_address.lower() == self.operator, \
-            "[ERR_UNAUTHORIZED] Caller is not the contract operator."
+        assert gl.message.sender_address.lower() == self.operator,             "[ERR_UNAUTHORIZED] Caller is not the contract operator."
         clean_relay = relay_address.strip().strip('"').strip("'").lower()
-        assert len(clean_relay) == 42 and clean_relay.startswith("0x"), \
-            "[ERR_INVALID_RELAY] Invalid relay address."
+        assert len(clean_relay) == 42 and clean_relay.startswith("0x"),             "[ERR_INVALID_RELAY] Invalid relay address."
         self.authorized_relay = clean_relay
         return f"SUCCESS: Authorized relay updated to {clean_relay}."
 
     @gl.public.write
     def deposit_underwriting_capital(self, amount_usdc: u256) -> str:
-        """Deposits capital into the SlashingGuard insurance reserve pool."""
+        """Deposits capital into the SlashingGuard insurance reserve pool (Operator or Relay only)."""
+        sender = str(gl.message.sender_address).lower()
+        assert sender in (self.operator, self.authorized_relay),             "[ERR_UNAUTHORIZED] Caller is not authorized to deposit underwriting capital."
         amt = int(amount_usdc)
         assert amt > 0, "[ERR_AMOUNT_01] Deposit amount must be greater than zero."
         self.pool_capital_usdc = u256(int(self.pool_capital_usdc) + amt)
@@ -139,10 +142,11 @@ class SlashingGuardCourt(gl.Contract):
         assert prem > 0, "[ERR_PREMIUM_01] Premium must be greater than zero."
         assert max_epoch > 0, "[ERR_EPOCH_01] Max exit epoch must be greater than zero."
 
-        # SOLVENCY INVARIANT: Pool capital must cover all active underwriting liabilities
-        avail_capital = int(self.pool_capital_usdc) - int(self.total_active_coverage_usdc)
-        assert avail_capital >= cov, \
-            f"[ERR_INSUFFICIENT_POOL_CAPITAL] Insufficient pool capital ({avail_capital} USDC available) for requested coverage ({cov} USDC)."
+        # SOLVENCY INVARIANT: Available capital must cover requested coverage
+        # Available capital = pool_capital - total_claims_paid - total_active_coverage
+        total_committed = int(self.total_claims_paid_usdc) + int(self.total_active_coverage_usdc)
+        avail_capital = max(0, int(self.pool_capital_usdc) - total_committed)
+        assert avail_capital >= cov,             f"[ERR_INSUFFICIENT_POOL_CAPITAL] Insufficient pool capital ({avail_capital} USDC available) for requested coverage ({cov} USDC)."
 
         c_num = int(self.total_policies) + 1
         self.total_policies = u256(c_num)
@@ -162,6 +166,8 @@ class SlashingGuardCourt(gl.Contract):
             last_observed_epoch=u256(0)
         )
 
+        # Premium paid accrues to pool capital reserves
+        self.pool_capital_usdc = u256(int(self.pool_capital_usdc) + prem)
         self.total_active_coverage_usdc = u256(int(self.total_active_coverage_usdc) + cov)
         self.policies[policy_id] = new_policy
         self.policy_keys[str(c_num - 1)] = policy_id
@@ -177,8 +183,7 @@ class SlashingGuardCourt(gl.Contract):
         assert p_id in self.policies, f"[ERR_STATE_01] Policy '{p_id}' does not exist."
         policy = self.policies[p_id]
 
-        assert policy.status == "ACTIVE", \
-            f"[ERR_STATE_02] Policy '{p_id}' is not in active state (current: {policy.status})."
+        assert policy.status == "ACTIVE",             f"[ERR_STATE_02] Policy '{p_id}' is not in active state (current: {policy.status})."
 
         v_idx = int(policy.validator_index)
         v_pubkey = policy.validator_pubkey
@@ -186,24 +191,18 @@ class SlashingGuardCourt(gl.Contract):
         max_epoch = int(policy.max_exit_epoch)
         staker = policy.staker_address
 
-        # Target official public Ethereum Beacon Chain REST API endpoint
-        beacon_url = f"https://ethereum-beacon-api.publicnode.com/eth/v1/beacon/states/head/validators/{v_idx}"
-        time_url = "https://timeapi.io/api/time/current/zone?timeZone=UTC"
+        telemetry_host = "ethereum-beacon-api.publicnode.com"
+        assert telemetry_host in self.authorized_sources,             f"[ERR_UNAUTHORIZED_SOURCE] Telemetry host '{telemetry_host}' is not authorized."
+
+        beacon_url = f"https://{telemetry_host}/eth/v1/beacon/states/head/validators/{v_idx}"
 
         def get_telemetry_input() -> str:
-            time_raw = gl.nondet.web.render(time_url, mode="text")
-            time_data = time_raw.strip()
-            if "</think>" in time_data:
-                time_data = time_data.split("</think>")[-1].strip()
-
             beacon_raw = gl.nondet.web.render(beacon_url, mode="text")
             beacon_data = beacon_raw.strip()
             if "</think>" in beacon_data:
                 beacon_data = beacon_data.split("</think>")[-1].strip()
 
             return (
-                f"=== UTC ATOMIC CLOCK AUDIT ===\n"
-                f"{time_data}\n\n"
                 f"=== SLASHINGGUARD POLICY MANDATE ===\n"
                 f"Policy ID: {p_id}\n"
                 f"Insured Staker: '{staker}'\n"
@@ -222,13 +221,14 @@ class SlashingGuardCourt(gl.Contract):
             "TELEMETRY EVALUATION INSTRUCTIONS:\n"
             "1. Verify that the response contains valid Ethereum Beacon Chain validator data for the specified index.\n"
             "2. Extract:\n"
-            "   - current_utc_timestamp: Integer epoch unix timestamp (seconds)\n"
             "   - telemetry_accessible: boolean (true if beacon API returned valid validator JSON)\n"
             "   - validator_index: Integer index of the validator\n"
             "   - validator_pubkey: String hex public key of the validator (from data.validator.pubkey)\n"
             "   - validator_status: String lifecycle status (e.g. 'active_ongoing', 'withdrawal_done', 'exited_slashed')\n"
-            "   - slashed: Boolean true if the validator was slashed (data.validator.slashed == true), false otherwise\n"
-            "   - exit_epoch: Integer epoch when the validator exited (data.validator.exit_epoch)\n"
+            "   - slashed: Boolean true strictly if data.validator.slashed == true, else false\n"
+            "   - exit_epoch: Integer epoch when the validator exited (from data.validator.exit_epoch).\n"
+            "     Note: For unslashed active validators, exit_epoch is typically 18446744073709551615 (FAR_FUTURE_EPOCH);\n"
+            "     if slashed is false, claim_verdict MUST be 'HEALTHY_NORMAL'.\n"
             f"   - in_term_slashed: boolean (true strictly if slashed == true AND exit_epoch <= {max_epoch}, else false)\n"
             "   - claim_verdict: string enum ('CLAIM_APPROVED', 'POLICY_EXPIRED', or 'HEALTHY_NORMAL'):\n"
             f"     * 'CLAIM_APPROVED': strictly if slashed == true AND exit_epoch <= {max_epoch}\n"
@@ -237,7 +237,6 @@ class SlashingGuardCourt(gl.Contract):
             "   - summary: Short 1-2 sentence factual report stating validator status, slashed flag, exit epoch, and verdict.\n\n"
             "Output JSON format:\n"
             "{\n"
-            '  "current_utc_timestamp": <int>,\n'
             '  "telemetry_accessible": true/false,\n'
             '  "validator_index": <int>,\n'
             '  "validator_pubkey": "<0x...>",\n'
@@ -286,7 +285,6 @@ class SlashingGuardCourt(gl.Contract):
                 raw_json = raw_json.replace("```json", "").replace("```", "").strip()
 
         res = json.loads(raw_json)
-        now_ts = int(res.get("current_utc_timestamp", 1724700000))
         telemetry_ok = bool(res.get("telemetry_accessible", False))
         assert telemetry_ok, "[ERR_TELEMETRY_01] Failed to read live Ethereum Beacon Chain telemetry (Fail-Closed)."
 
@@ -295,8 +293,7 @@ class SlashingGuardCourt(gl.Contract):
 
         scraped_pubkey = str(res.get("validator_pubkey", "")).strip().lower()
         if v_pubkey and len(v_pubkey) >= 10:
-            assert scraped_pubkey == v_pubkey.lower(), \
-                f"[ERR_PUBKEY_MISMATCH] Scraped key ({scraped_pubkey[:12]}...) does not match registered key ({v_pubkey[:12]}...)."
+            assert scraped_pubkey == v_pubkey.lower(),                 f"[ERR_PUBKEY_MISMATCH] Scraped key ({scraped_pubkey[:12]}...) does not match registered key ({v_pubkey[:12]}...)."
 
         is_slashed = bool(res.get("slashed", False))
         v_status = str(res.get("validator_status", "UNKNOWN"))
@@ -307,7 +304,8 @@ class SlashingGuardCourt(gl.Contract):
 
         policy.last_observed_epoch = u256(exit_epoch)
 
-        if claim_verdict == "CLAIM_APPROVED" or (is_slashed and in_term_slashed):
+        # STRICT FAIL-CLOSED CONJUNCTION EVALUATION (H-01 Resolution)
+        if is_slashed and in_term_slashed and claim_verdict == "CLAIM_APPROVED":
             policy.status = "CLAIM_APPROVED"
             self.total_claims_paid_usdc = u256(int(self.total_claims_paid_usdc) + cov)
             self.total_active_coverage_usdc = u256(int(self.total_active_coverage_usdc) - cov)
@@ -315,18 +313,23 @@ class SlashingGuardCourt(gl.Contract):
                 f"SLASHING CLAIM APPROVED: Validator #{v_idx} confirmed slashed on Ethereum Beacon Chain at epoch {exit_epoch}. "
                 f"Authorized reimbursement of {cov} USDC to {staker}. {summary}"
             )
-        elif claim_verdict == "POLICY_EXPIRED" or (is_slashed and not in_term_slashed):
+        elif is_slashed and (not in_term_slashed) and claim_verdict == "POLICY_EXPIRED":
             policy.status = "EXPIRED"
             self.total_active_coverage_usdc = u256(int(self.total_active_coverage_usdc) - cov)
             policy.last_audit_summary = (
                 f"POLICY EXPIRED: Slashing occurred at epoch {exit_epoch}, which exceeds policy term {max_epoch}. "
                 f"Collateral preserved. {summary}"
             )
-        else:
+        elif (not is_slashed) and claim_verdict == "HEALTHY_NORMAL":
             policy.status = "ACTIVE"
             policy.last_audit_summary = (
                 f"POLICY HEALTHY: Validator #{v_idx} is operating normally ({v_status}, slashed=false). "
                 f"Underwriting reserve preserved. {summary}"
+            )
+        else:
+            raise AssertionError(
+                f"[ERR_VERDICT_CONTRADICTION] Contradictory verdict state: slashed={is_slashed}, "
+                f"in_term={in_term_slashed}, verdict='{claim_verdict}'."
             )
 
         self.policies[p_id] = policy
@@ -345,29 +348,29 @@ class SlashingGuardCourt(gl.Contract):
         Restricted to the authorized settlement relay or contract operator.
         """
         sender = str(gl.message.sender_address).lower()
-        assert sender in (self.authorized_relay, self.operator), \
-            "[ERR_UNAUTHORIZED_RELAY] Caller is not the authorized settlement relay."
+        assert sender in (self.authorized_relay, self.operator),             "[ERR_UNAUTHORIZED_RELAY] Caller is not the authorized settlement relay."
 
         p_id = policy_id.strip()
         assert p_id in self.policies, f"[ERR_STATE_01] Policy '{p_id}' does not exist."
         policy = self.policies[p_id]
 
-        assert policy.status == "CLAIM_APPROVED", \
-            f"[ERR_SETTLEMENT_01] Policy '{p_id}' is not in approved state (current: {policy.status})."
+        assert policy.status == "CLAIM_APPROVED",             f"[ERR_SETTLEMENT_01] Policy '{p_id}' is not in approved state (current: {policy.status})."
 
         clean_hash = evm_tx_hash.strip().lower()
-        assert len(clean_hash) == 66 and clean_hash.startswith("0x"), \
-            "[ERR_HASH_01] Invalid EVM settlement transaction hash format."
+        assert len(clean_hash) == 66 and clean_hash.startswith("0x"),             "[ERR_HASH_01] Invalid EVM settlement transaction hash format."
 
-        assert int(disbursed_amount_usdc) == int(policy.coverage_amount_usdc), \
-            f"[ERR_AMOUNT_MISMATCH] Disbursed amount ({int(disbursed_amount_usdc)}) does not match policy coverage ({int(policy.coverage_amount_usdc)})."
+        # C-01 Resolution: Global Anti-Replay across all policies
+        assert clean_hash not in self.settled_tx_hashes,             f"[ERR_HASH_ALREADY_USED] EVM transaction receipt '{clean_hash}' has already been consumed for another settlement."
 
-        assert int(settlement_block) > 0, \
-            f"[ERR_BLOCK_01] Invalid settlement block number ({int(settlement_block)})."
+        assert int(disbursed_amount_usdc) == int(policy.coverage_amount_usdc),             f"[ERR_AMOUNT_MISMATCH] Disbursed amount ({int(disbursed_amount_usdc)}) does not match policy coverage ({int(policy.coverage_amount_usdc)})."
 
-        # Anti-replay on settlement receipt
-        assert policy.claim_payout_tx_hash == "", \
-            f"[ERR_CLAIM_ALREADY_SETTLED] Claim for policy '{p_id}' has already been settled."
+        assert int(settlement_block) > 0,             f"[ERR_BLOCK_01] Invalid settlement block number ({int(settlement_block)})."
+
+        # Policy-level anti-replay
+        assert policy.claim_payout_tx_hash == "",             f"[ERR_CLAIM_ALREADY_SETTLED] Claim for policy '{p_id}' has already been settled."
+
+        # Register hash globally
+        self.settled_tx_hashes[clean_hash] = True
 
         policy.status = "SETTLED"
         policy.claim_payout_tx_hash = clean_hash
@@ -407,11 +410,13 @@ class SlashingGuardCourt(gl.Contract):
     @gl.public.view
     def get_pool_stats(self) -> str:
         """Returns overall underwriting pool solvency and statistics."""
+        total_committed = int(self.total_claims_paid_usdc) + int(self.total_active_coverage_usdc)
+        available_cap = max(0, int(self.pool_capital_usdc) - total_committed)
         return json.dumps({
             "pool_capital_usdc": int(self.pool_capital_usdc),
             "total_active_coverage_usdc": int(self.total_active_coverage_usdc),
             "total_claims_paid_usdc": int(self.total_claims_paid_usdc),
-            "available_capital_usdc": int(self.pool_capital_usdc) - int(self.total_active_coverage_usdc),
+            "available_capital_usdc": available_cap,
             "total_policies_count": int(self.total_policies)
         })
 

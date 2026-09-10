@@ -6,6 +6,11 @@ pragma solidity ^0.8.20;
  * @notice Underwriting reserve and reimbursement vault for Ethereum validator slashing insurance.
  * Coordinates collateral custody, premium deposits, and automated parametric claim payouts
  * authorized by the GenLayer SlashingGuardCourt Intelligent Contract.
+ *
+ * Hardened with:
+ * 1. Checks-Effects-Interactions pattern and anti-replay mapping.
+ * 2. Pull-payment fallback (pendingReimbursements) preventing recipient DoS.
+ * 3. Emergency token and reserve administration functions.
  */
 contract SlashingGuardVault {
     address public owner;
@@ -16,16 +21,21 @@ contract SlashingGuardVault {
 
     mapping(bytes32 => bool) public settledClaims;
     mapping(address => uint256) public stakerPremiums;
+    mapping(address => uint256) public pendingReimbursements;
 
     event PremiumDeposited(address indexed staker, uint256 amount);
     event ClaimPaid(bytes32 indexed policyId, address indexed staker, uint256 amount);
+    event ReimbursementQueued(bytes32 indexed policyId, address indexed staker, uint256 amount);
+    event ReimbursementWithdrawn(address indexed staker, uint256 amount);
     event ReservesReplenished(uint256 amount);
+    event EmergencyWithdrawn(address indexed recipient, uint256 amount);
 
     error Unauthorized();
     error AlreadySettled();
     error InsufficientReserves();
     error InvalidAddress();
     error InvalidAmount();
+    error NoPendingFunds();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert Unauthorized();
@@ -64,6 +74,7 @@ contract SlashingGuardVault {
     /**
      * @notice Disburses verified slashing claim to the insured staker.
      * Callable only by the authorized GenLayer settlement relay upon verified consensus approval.
+     * Uses pull-payment fallback if direct transfer fails (DoS prevention).
      */
     function executeSlashingPayout(
         bytes32 policyId,
@@ -75,15 +86,36 @@ contract SlashingGuardVault {
         if (settledClaims[policyId]) revert AlreadySettled();
         if (totalReserves < amount) revert InsufficientReserves();
 
+        // Checks-Effects
         settledClaims[policyId] = true;
         totalReserves -= amount;
         totalClaimsPaid += amount;
 
+        // Interactions with DoS resilience
         (bool success, ) = staker.call{value: amount}("");
-        require(success, "Transfer failed");
+        if (!success) {
+            // Queue for pull-payment if direct transfer reverts (e.g. smart contract recipient)
+            pendingReimbursements[staker] += amount;
+            emit ReimbursementQueued(policyId, staker, amount);
+        } else {
+            emit ClaimPaid(policyId, staker, amount);
+        }
 
-        emit ClaimPaid(policyId, staker, amount);
         return true;
+    }
+
+    /**
+     * @notice Allows a staker to pull their reimbursement if direct transfer failed.
+     */
+    function withdrawPendingReimbursement() external {
+        uint256 pending = pendingReimbursements[msg.sender];
+        if (pending == 0) revert NoPendingFunds();
+
+        pendingReimbursements[msg.sender] = 0;
+        (bool success, ) = msg.sender.call{value: pending}("");
+        require(success, "Withdrawal transfer failed");
+
+        emit ReimbursementWithdrawn(msg.sender, pending);
     }
 
     /**
@@ -92,6 +124,20 @@ contract SlashingGuardVault {
     function setAuthorizedRelay(address _newRelay) external onlyOwner {
         if (_newRelay == address(0)) revert InvalidAddress();
         authorizedRelay = _newRelay;
+    }
+
+    /**
+     * @notice Emergency withdrawal of excess uncommitted reserves (Owner only).
+     */
+    function emergencyWithdraw(address payable recipient, uint256 amount) external onlyOwner {
+        if (recipient == address(0)) revert InvalidAddress();
+        if (amount > totalReserves) revert InsufficientReserves();
+
+        totalReserves -= amount;
+        (bool success, ) = recipient.call{value: amount}("");
+        require(success, "Emergency transfer failed");
+
+        emit EmergencyWithdrawn(recipient, amount);
     }
 
     receive() external payable {
