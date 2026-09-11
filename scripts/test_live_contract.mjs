@@ -1,6 +1,6 @@
 import { createClient, createAccount } from 'genlayer-js';
 
-const CONTRACT_ADDRESS = '0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50';
+const CONTRACT_ADDRESS = '0x40a1C2b279a77B971761730f60772F10F4E1250F';
 const RPC_ENDPOINT = 'https://studio.genlayer.com/api';
 
 async function testLiveContract() {

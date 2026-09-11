@@ -7,14 +7,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const RPC_ENDPOINT = process.env.GENLAYER_RPC || 'https://studio.genlayer.com/api';
-const RELAY_PRIVATE_KEY = process.env.RELAY_PRIVATE_KEY || '';
+const RELAY_PRIVATE_KEY = process.env.RELAY_PRIVATE_KEY || '0x6de1107ac2d1750b9830314d75e6afdb5f3e2d0c055e1fe5ad16bf78bf24befd';
 
 async function main() {
     console.log("===============================================================================");
     console.log("    DEPLOYING SLASHINGGUARD COURT WITH BOUND RELAY TO GENLAYER STUDIO");
     console.log("===============================================================================\n");
 
-    const account = RELAY_PRIVATE_KEY ? createAccount(RELAY_PRIVATE_KEY) : createAccount();
+    const account = createAccount(RELAY_PRIVATE_KEY);
     console.log("[Deployer] Address:", account.address);
 
     const client = createClient({

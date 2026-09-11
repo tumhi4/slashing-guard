@@ -7,7 +7,7 @@
 ## 🔗 Verified On-Chain Deployments & Explorer Links
 
 - **GenLayer Production Intelligent Court (Live Relay & Explorer Verified)**:  
-  [`0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50`](https://explorer-studio.genlayer.com/address/0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50)  
+  [`0x40a1C2b279a77B971761730f60772F10F4E1250F`](https://explorer-studio.genlayer.com/address/0x40a1C2b279a77B971761730f60772F10F4E1250F)  
   *Hardened with consensus-verified Base Sepolia payment evidence, connected live to Next.js frontend.*
 - **EVM Underwriting Vault Contract (Base Sepolia)**:  
   [`0x3Fa9b23f81902c34918239482910394817e12a89`](https://sepolia.basescan.org/address/0x3Fa9b23f81902c34918239482910394817e12a89)  

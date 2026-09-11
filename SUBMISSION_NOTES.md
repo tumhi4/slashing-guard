@@ -1,6 +1,6 @@
 # SlashingGuard — Autonomous Ethereum PoS Slashing Insurance Protocol
 **Contribution Type**: Builder · Projects
-**Deployed Intelligent Contract**: [`0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50`](https://explorer-studio.genlayer.com/address/0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50)
+**Deployed Intelligent Contract**: [`0x40a1C2b279a77B971761730f60772F10F4E1250F`](https://explorer-studio.genlayer.com/address/0x40a1C2b279a77B971761730f60772F10F4E1250F)
 **GitHub Repository**: [https://github.com/tumhi4/slashing-guard](https://github.com/tumhi4/slashing-guard)
 **EVM Underwriting Vault**: [`0x3Fa9b23f81902c34918239482910394817e12a89`](https://sepolia.basescan.org/address/0x3Fa9b23f81902c34918239482910394817e12a89)
 
@@ -16,9 +16,10 @@
 1. **User Workflow Connected to Submitted Contracts**:
    - The Next.js web application (`frontend/app/page.tsx`) is now directly integrated with the live GenLayer Intelligent Contract via `genlayer-js`.
    - All mock state and client-side `setTimeout` simulations have been completely eliminated.
-   - The dashboard dynamically reads live state (`get_total_policies`, `get_policy`, `get_pool_stats`) on mount and refresh from `0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50`.
+   - The dashboard dynamically reads live state (`get_total_policies`, `get_policy`, `get_pool_stats`) on mount and refresh from `0x40a1C2b279a77B971761730f60772F10F4E1250F`.
    - The **Register Policy** button broadcasts real `register_policy` transactions directly to GenLayer.
    - The **Audit Slashing** button broadcasts real `assess_slashing_claim` transactions and awaits AI validator jury consensus on-chain.
+   - The **Verify & Settle Base Sepolia Payment** modal broadcasts real `confirm_settlement` transactions to GenLayer with authenticated Base Sepolia transaction evidence.
 
 2. **Authenticated, Successful Vault Payment Evidence Enforced**:
    - In `SlashingGuardCourt.py`, `confirm_settlement()` no longer accepts unverified transaction strings.

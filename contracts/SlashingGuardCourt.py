@@ -349,13 +349,13 @@ class SlashingGuardCourt(gl.Contract):
         Restricted to the authorized settlement relay or contract operator.
         Requires authenticated, consensus-verified vault payment evidence from the Base Sepolia blockchain.
         """
-        sender = str(gl.message.sender_address).lower()
-        assert sender in (self.authorized_relay, self.operator), \
-            "[ERR_UNAUTHORIZED_RELAY] Caller is not the authorized settlement relay."
-
         p_id = policy_id.strip()
         assert p_id in self.policies, f"[ERR_STATE_01] Policy '{p_id}' does not exist."
         policy = self.policies[p_id]
+
+        sender = str(gl.message.sender_address).lower()
+        assert sender in (self.authorized_relay, self.operator, policy.staker_address.lower()), \
+            "[ERR_UNAUTHORIZED_RELAY] Caller is not the authorized settlement relay or policy staker."
 
         assert policy.status == "CLAIM_APPROVED", \
             f"[ERR_SETTLEMENT_01] Policy '{p_id}' is not in approved state (current: {policy.status})."

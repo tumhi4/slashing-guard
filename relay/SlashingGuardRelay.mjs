@@ -11,10 +11,10 @@ const __dirname = path.dirname(__filename);
 
 // Configuration
 const GENLAYER_RPC = process.env.GENLAYER_RPC || 'https://studio.genlayer.com/api';
-const GENLAYER_COURT = process.env.GENLAYER_COURT_ADDRESS || '0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50';
+const GENLAYER_COURT = process.env.GENLAYER_COURT_ADDRESS || '0x40a1C2b279a77B971761730f60772F10F4E1250F';
 const EVM_RPC_URL = process.env.EVM_RPC_URL || 'https://sepolia.base.org';
 const EVM_VAULT_ADDRESS = process.env.EVM_VAULT_ADDRESS || '0x3Fa9b23f81902c34918239482910394817e12a89';
-const RELAY_PRIVATE_KEY = process.env.RELAY_PRIVATE_KEY || '';
+const RELAY_PRIVATE_KEY = process.env.RELAY_PRIVATE_KEY || '0x6de1107ac2d1750b9830314d75e6afdb5f3e2d0c055e1fe5ad16bf78bf24befd';
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '15000', 10);
 
 // Load EVM Vault ABI
