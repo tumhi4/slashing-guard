@@ -6,6 +6,17 @@
 
 ---
 
+## 📖 Project Overview (< 1,000 Characters for Portal Description)
+
+SlashingGuard is an autonomous, parametric Ethereum PoS slashing insurance protocol on GenLayer. It enables solo stakers and operators to hedge validator capital against slashing with zero human adjusters or centralized oracles.
+
+SYSTEM ARCHITECTURE & WORKFLOW:
+1. Live dApp Interface: Next.js frontend connects directly to GenLayer Intelligent Court (0x40a1C2b279a77B971761730f60772F10F4E1250F) via genlayer-js for live solvency stats, policy registration, and claim audits.
+2. AI Consensus Adjudication: Slashed claims trigger GenLayer multi-validator AI consensus (gl.nondet.web.render) scraping official Beacon Chain REST APIs. Validators reach strict equivalence on validator index, BLS pubkey, and exit epoch.
+3. Authenticated Settlement: Cross-chain reimbursements disburse via EVM Vault on Base Sepolia. The Court independently verifies on-chain Blockscout receipt evidence before confirming settlement, strictly rejecting fabricated receipts.
+
+---
+
 ## 🎯 Steward Feedback Resolution (Sep 11, 2026)
 
 ### Steward Rejection Reason:
