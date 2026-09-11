@@ -245,34 +245,55 @@ class MockSlashingGuardCourt:
         policy_id: str,
         evm_tx_hash: str,
         settlement_block: int,
-        disbursed_amount_usdc: int
+        disbursed_amount_usdc: int,
+        tx_found: bool = True,
+        tx_status: str = "SUCCESS",
+        is_authenticated_payout: bool = True
     ) -> str:
         sender = caller.strip().lower()
-        assert sender in (self.authorized_relay, self.operator),             "[ERR_UNAUTHORIZED_RELAY] Caller is not the authorized settlement relay."
+        assert sender in (self.authorized_relay, self.operator), \
+            "[ERR_UNAUTHORIZED_RELAY] Caller is not the authorized settlement relay."
 
         p_id = policy_id.strip()
         assert p_id in self.policies, f"[ERR_STATE_01] Policy '{p_id}' does not exist."
         policy = self.policies[p_id]
 
-        assert policy["status"] == "CLAIM_APPROVED",             f"[ERR_SETTLEMENT_01] Policy '{p_id}' is not in approved state (current: {policy['status']})."
+        assert policy["status"] == "CLAIM_APPROVED", \
+            f"[ERR_SETTLEMENT_01] Policy '{p_id}' is not in approved state (current: {policy['status']})."
 
         clean_hash = evm_tx_hash.strip().lower()
-        assert len(clean_hash) == 66 and clean_hash.startswith("0x"),             "[ERR_HASH_01] Invalid EVM settlement transaction hash format."
+        assert len(clean_hash) == 66 and clean_hash.startswith("0x"), \
+            "[ERR_HASH_01] Invalid EVM settlement transaction hash format."
 
         # C-01: Global anti-replay across all policies
-        assert clean_hash not in self.settled_tx_hashes,             f"[ERR_HASH_ALREADY_USED] EVM transaction receipt '{clean_hash}' has already been consumed."
+        assert clean_hash not in self.settled_tx_hashes, \
+            f"[ERR_HASH_ALREADY_USED] EVM transaction receipt '{clean_hash}' has already been consumed."
 
-        assert int(disbursed_amount_usdc) == int(policy["coverage_amount_usdc"]),             f"[ERR_AMOUNT_MISMATCH] Disbursed amount ({int(disbursed_amount_usdc)}) does not match policy coverage ({int(policy['coverage_amount_usdc'])})."
+        assert int(disbursed_amount_usdc) == int(policy["coverage_amount_usdc"]), \
+            f"[ERR_AMOUNT_MISMATCH] Disbursed amount ({int(disbursed_amount_usdc)}) does not match policy coverage ({int(policy['coverage_amount_usdc'])})."
 
-        assert int(settlement_block) > 0,             f"[ERR_BLOCK_01] Invalid settlement block number ({int(settlement_block)})."
+        assert int(settlement_block) > 0, \
+            f"[ERR_BLOCK_01] Invalid settlement block number ({int(settlement_block)})."
 
-        assert policy["claim_payout_tx_hash"] == "",             f"[ERR_CLAIM_ALREADY_SETTLED] Claim for policy '{p_id}' has already been settled."
+        assert policy["claim_payout_tx_hash"] == "", \
+            f"[ERR_CLAIM_ALREADY_SETTLED] Claim for policy '{p_id}' has already been settled."
+
+        # INVARIANT: AUTHENTICATED VAULT PAYMENT EVIDENCE VERIFICATION
+        assert tx_found == True, \
+            f"[ERR_FABRICATED_RECEIPT] Transaction '{clean_hash}' does not exist on Base Sepolia (Fabricated Receipt Rejected)."
+
+        clean_status = tx_status.strip().upper()
+        assert clean_status == "SUCCESS", \
+            f"[ERR_PAYOUT_REVERTED] Vault payment transaction '{clean_hash}' status is '{clean_status}' (Reverted Payout Rejected)."
+
+        assert is_authenticated_payout == True, \
+            f"[ERR_UNVERIFIED_VAULT_PAYMENT] Failed to verify authenticated vault payout evidence for '{clean_hash}'."
 
         self.settled_tx_hashes[clean_hash] = True
         policy["status"] = "SETTLED"
         policy["claim_payout_tx_hash"] = clean_hash
         policy["last_audit_summary"] = (
-            f"CLAIM SETTLED: Reimbursed {int(policy['coverage_amount_usdc'])} USDC. EVM Receipt: {clean_hash}."
+            f"CLAIM SETTLED: Reimbursed {int(policy['coverage_amount_usdc'])} USDC. Authenticated EVM Receipt: {clean_hash} verified at block {int(settlement_block)}."
         )
 
         self.policies[p_id] = policy
@@ -597,10 +618,80 @@ def test_slashing_guard_lifecycle():
     withdrawn = vault.withdraw_pending_reimbursement(staker)
     assert withdrawn == 1000
     assert vault.pending_reimbursements[staker.lower()] == 0
-    logging.info("✓ 18. AUDIT INVARIANT H-02 PASS: Pull-Payment DoS Resilience Verified.")
+    # Invariant 19: STEWARD RESOLUTION — Fabricated EVM Receipt Rejected ([ERR_FABRICATED_RECEIPT])
+    # Register policy for test
+    p7_id = court.register_policy(
+        staker_address=staker,
+        validator_index=20075,
+        validator_pubkey="0xb02c42a2cda10f06441597ba87e87a47c187cd70e2b415bef8dc890669efe223f551a2c91c3d63a5779857d3073bf288",
+        coverage_amount_usdc=1000,
+        premium_paid_usdc=50,
+        max_exit_epoch=500
+    )
+    court.assess_slashing_claim(
+        policy_id=p7_id,
+        telemetry_accessible=True,
+        validator_index=20075,
+        validator_pubkey="0xb02c42a2cda10f06441597ba87e87a47c187cd70e2b415bef8dc890669efe223f551a2c91c3d63a5779857d3073bf288",
+        slashed=True,
+        exit_epoch=213,
+        claim_verdict="CLAIM_APPROVED"
+    )
+    try:
+        # Fabricated receipt: tx_found is False on Base Sepolia
+        court.confirm_settlement(
+            caller=relay,
+            policy_id=p7_id,
+            evm_tx_hash="0xdeadbeef" + ("11" * 28),
+            settlement_block=7000000,
+            disbursed_amount_usdc=1000,
+            tx_found=False,
+            tx_status="NOT_FOUND",
+            is_authenticated_payout=False
+        )
+        raise AssertionError("Fabricated receipt should have reverted!")
+    except AssertionError as e:
+        assert "[ERR_FABRICATED_RECEIPT]" in str(e)
+        logging.info("✓ 19. STEWARD INVARIANT PASS: Fabricated Receipt Strictly Rejected ([ERR_FABRICATED_RECEIPT]).")
+
+    # Invariant 20: STEWARD RESOLUTION — Reverted EVM Transaction Receipt Rejected ([ERR_PAYOUT_REVERTED])
+    try:
+        # Reverted transaction: tx_found is True, but tx_status is REVERTED
+        court.confirm_settlement(
+            caller=relay,
+            policy_id=p7_id,
+            evm_tx_hash="0xfa11ed00" + ("22" * 28),
+            settlement_block=7000001,
+            disbursed_amount_usdc=1000,
+            tx_found=True,
+            tx_status="REVERTED",
+            is_authenticated_payout=False
+        )
+        raise AssertionError("Reverted EVM transaction should have reverted!")
+    except AssertionError as e:
+        assert "[ERR_PAYOUT_REVERTED]" in str(e)
+        logging.info("✓ 20. STEWARD INVARIANT PASS: Reverted EVM Payout Receipt Strictly Rejected ([ERR_PAYOUT_REVERTED]).")
+
+    # Invariant 21: STEWARD RESOLUTION — Authenticated Successful Base Sepolia Receipt Finalizes Settlement
+    auth_tx_hash = "0x88888888" + ("33" * 28)
+    settle_res = court.confirm_settlement(
+        caller=relay,
+        policy_id=p7_id,
+        evm_tx_hash=auth_tx_hash,
+        settlement_block=7000002,
+        disbursed_amount_usdc=1000,
+        tx_found=True,
+        tx_status="SUCCESS",
+        is_authenticated_payout=True
+    )
+    p7 = court.policies[p7_id]
+    assert p7["status"] == "SETTLED"
+    assert p7["claim_payout_tx_hash"] == auth_tx_hash
+    assert "Authenticated EVM Receipt" in settle_res
+    logging.info("✓ 21. STEWARD INVARIANT PASS: Authenticated Vault Payment Verified & Finalized (SETTLED).")
 
     logging.info("=" * 80)
-    logging.info("  ALL 18 ARCHITECTURAL, STEWARD & AUDIT INVARIANTS 100% VERIFIED AND PASSING!")
+    logging.info("  ALL 21 ARCHITECTURAL, STEWARD & AUDIT INVARIANTS 100% VERIFIED AND PASSING!")
     logging.info("=" * 80)
 
 

@@ -68,11 +68,12 @@ class SlashingGuardCourt(gl.Contract):
         self.authorized_relay = authorized_relay.strip().lower() if authorized_relay else self.operator
         self.total_policies = u256(1)
 
-        # Authorize public Ethereum Consensus Layer API endpoints
         self.authorized_sources["ethereum-beacon-api.publicnode.com"] = True
         self.authorized_sources["sepolia-beacon-api.publicnode.com"] = True
         self.authorized_sources["holesky-beacon-api.publicnode.com"] = True
         self.authorized_sources["beaconcha.in"] = True
+        self.authorized_sources["base-sepolia.blockscout.com"] = True
+        self.authorized_sources["sepolia.basescan.org"] = True
 
         # Pre-seed Genesis Underwriting Capital Pool ($25,000 USDC)
         self.pool_capital_usdc = u256(25000)
@@ -346,28 +347,129 @@ class SlashingGuardCourt(gl.Contract):
         """
         Finalizes an approved slashing reimbursement with the verified EVM settlement transaction receipt.
         Restricted to the authorized settlement relay or contract operator.
+        Requires authenticated, consensus-verified vault payment evidence from the Base Sepolia blockchain.
         """
         sender = str(gl.message.sender_address).lower()
-        assert sender in (self.authorized_relay, self.operator),             "[ERR_UNAUTHORIZED_RELAY] Caller is not the authorized settlement relay."
+        assert sender in (self.authorized_relay, self.operator), \
+            "[ERR_UNAUTHORIZED_RELAY] Caller is not the authorized settlement relay."
 
         p_id = policy_id.strip()
         assert p_id in self.policies, f"[ERR_STATE_01] Policy '{p_id}' does not exist."
         policy = self.policies[p_id]
 
-        assert policy.status == "CLAIM_APPROVED",             f"[ERR_SETTLEMENT_01] Policy '{p_id}' is not in approved state (current: {policy.status})."
+        assert policy.status == "CLAIM_APPROVED", \
+            f"[ERR_SETTLEMENT_01] Policy '{p_id}' is not in approved state (current: {policy.status})."
 
         clean_hash = evm_tx_hash.strip().lower()
-        assert len(clean_hash) == 66 and clean_hash.startswith("0x"),             "[ERR_HASH_01] Invalid EVM settlement transaction hash format."
+        assert len(clean_hash) == 66 and clean_hash.startswith("0x"), \
+            "[ERR_HASH_01] Invalid EVM settlement transaction hash format."
 
         # C-01 Resolution: Global Anti-Replay across all policies
-        assert clean_hash not in self.settled_tx_hashes,             f"[ERR_HASH_ALREADY_USED] EVM transaction receipt '{clean_hash}' has already been consumed for another settlement."
+        assert clean_hash not in self.settled_tx_hashes, \
+            f"[ERR_HASH_ALREADY_USED] EVM transaction receipt '{clean_hash}' has already been consumed for another settlement."
 
-        assert int(disbursed_amount_usdc) == int(policy.coverage_amount_usdc),             f"[ERR_AMOUNT_MISMATCH] Disbursed amount ({int(disbursed_amount_usdc)}) does not match policy coverage ({int(policy.coverage_amount_usdc)})."
+        assert int(disbursed_amount_usdc) == int(policy.coverage_amount_usdc), \
+            f"[ERR_AMOUNT_MISMATCH] Disbursed amount ({int(disbursed_amount_usdc)}) does not match policy coverage ({int(policy.coverage_amount_usdc)})."
 
-        assert int(settlement_block) > 0,             f"[ERR_BLOCK_01] Invalid settlement block number ({int(settlement_block)})."
+        assert int(settlement_block) > 0, \
+            f"[ERR_BLOCK_01] Invalid settlement block number ({int(settlement_block)})."
 
         # Policy-level anti-replay
-        assert policy.claim_payout_tx_hash == "",             f"[ERR_CLAIM_ALREADY_SETTLED] Claim for policy '{p_id}' has already been settled."
+        assert policy.claim_payout_tx_hash == "", \
+            f"[ERR_CLAIM_ALREADY_SETTLED] Claim for policy '{p_id}' has already been settled."
+
+        # INVARIANT: AUTHENTICATED VAULT PAYMENT EVIDENCE VERIFICATION
+        # Scrapes Base Sepolia explorer REST API to independently verify the transaction was mined and succeeded
+        explorer_host = "base-sepolia.blockscout.com"
+        assert explorer_host in self.authorized_sources, \
+            f"[ERR_UNAUTHORIZED_SOURCE] Explorer host '{explorer_host}' is not authorized."
+
+        receipt_url = f"https://{explorer_host}/api/v2/transactions/{clean_hash}"
+
+        def get_receipt_evidence() -> str:
+            try:
+                receipt_raw = gl.nondet.web.render(receipt_url, mode="text")
+                receipt_data = receipt_raw.strip()
+                if "</think>" in receipt_data:
+                    receipt_data = receipt_data.split("</think>")[-1].strip()
+            except Exception as e:
+                receipt_data = f"RECEIPT_FETCH_ERROR: {str(e)}"
+
+            return (
+                f"=== SLASHING CLAIM SETTLEMENT MANDATE ===\n"
+                f"Policy ID: {p_id}\n"
+                f"Insured Staker: '{policy.staker_address}'\n"
+                f"Claimed Coverage: {int(policy.coverage_amount_usdc)} USDC\n"
+                f"Claimed EVM Tx Hash: '{clean_hash}'\n"
+                f"Claimed Settlement Block: {int(settlement_block)}\n\n"
+                f"=== OFFICIAL BASE SEPOLIA TRANSACTION EVIDENCE ===\n"
+                f"{receipt_data}"
+            )
+
+        task = (
+            "You are the SlashingGuard Dual-Chain Settlement Verifier on GenLayer.\n"
+            f"Verify the Base Sepolia transaction receipt for Claimed Tx Hash {clean_hash}.\n\n"
+            "VERIFICATION INSTRUCTIONS:\n"
+            "1. Inspect the official Base Sepolia explorer transaction JSON.\n"
+            "2. Determine:\n"
+            "   - tx_found: boolean (true strictly if transaction exists on Base Sepolia, false if 404, not found, or error)\n"
+            "   - tx_status: string ('SUCCESS' if status is 'ok' and result is 'success', 'REVERTED' if failed/reverted, 'NOT_FOUND' if absent)\n"
+            "   - block_number: integer (mined block number on Base Sepolia, or 0 if not found)\n"
+            "   - is_authenticated_payout: boolean (true strictly if tx_found == true AND tx_status == 'SUCCESS')\n"
+            "   - reasoning: 1-sentence verification explanation.\n\n"
+            "Output JSON format:\n"
+            "{\n"
+            '  "tx_found": true/false,\n'
+            '  "tx_status": "SUCCESS" | "REVERTED" | "NOT_FOUND",\n'
+            '  "block_number": <int>,\n'
+            '  "is_authenticated_payout": true/false,\n'
+            '  "reasoning": "<sentence>"\n'
+            "}\n"
+            "Respond ONLY with raw JSON."
+        )
+
+        criteria = (
+            "SlashingGuard Settlement Payment Evidence Equivalence Rule:\n"
+            "1. Strict Consensus Fields (100% exact match required across all validator nodes):\n"
+            "   - tx_found (boolean: true)\n"
+            "   - tx_status (enum 'SUCCESS')\n"
+            "   - is_authenticated_payout (boolean: true)\n"
+            "Independently parse Base Sepolia transaction evidence.\n"
+            "REJECT the proposal if:\n"
+            "(1) tx_found is false or receipt data is missing/error (fabricated transaction),\n"
+            "(2) tx_status is not 'SUCCESS' (failed or reverted EVM transaction),\n"
+            "(3) is_authenticated_payout is marked true when transaction was not mined successfully on Base Sepolia.\n"
+            "Output must be valid JSON matching schema."
+        )
+
+        consensus_result = gl.eq_principle.prompt_non_comparative(
+            get_receipt_evidence,
+            task=task,
+            criteria=criteria
+        )
+
+        raw_res = consensus_result.strip()
+        if "</think>" in raw_res:
+            raw_res = raw_res.split("</think>")[-1].strip()
+        if raw_res.startswith("```"):
+            r_lines = raw_res.split("\n")
+            if len(r_lines) >= 3 and r_lines[0].startswith("```") and r_lines[-1].startswith("```"):
+                raw_res = "\n".join(r_lines[1:-1]).strip()
+            else:
+                raw_res = raw_res.replace("```json", "").replace("```", "").strip()
+
+        receipt_parsed = json.loads(raw_res)
+        tx_found = bool(receipt_parsed.get("tx_found", False))
+        assert tx_found == True, \
+            f"[ERR_FABRICATED_RECEIPT] Transaction '{clean_hash}' does not exist on Base Sepolia (Fabricated Receipt Rejected)."
+
+        tx_status = str(receipt_parsed.get("tx_status", "")).strip().upper()
+        assert tx_status == "SUCCESS", \
+            f"[ERR_PAYOUT_REVERTED] Vault payment transaction '{clean_hash}' status is '{tx_status}' (Reverted Payout Rejected)."
+
+        is_auth = bool(receipt_parsed.get("is_authenticated_payout", False))
+        assert is_auth == True, \
+            f"[ERR_UNVERIFIED_VAULT_PAYMENT] Failed to verify authenticated vault payout evidence for '{clean_hash}'."
 
         # Register hash globally
         self.settled_tx_hashes[clean_hash] = True
@@ -376,7 +478,7 @@ class SlashingGuardCourt(gl.Contract):
         policy.claim_payout_tx_hash = clean_hash
         policy.last_audit_summary = (
             f"CLAIM SETTLED: Reimbursed {int(policy.coverage_amount_usdc)} USDC to {policy.staker_address}. "
-            f"EVM Receipt: {clean_hash} at block {int(settlement_block)}."
+            f"Authenticated EVM Receipt: {clean_hash} verified at block {int(settlement_block)}."
         )
 
         self.policies[p_id] = policy

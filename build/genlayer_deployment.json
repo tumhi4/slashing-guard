@@ -1,11 +1,11 @@
 {
-  "contract_address": "0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693",
-  "deployer": "0x3A78BDA3779a99780806d7F23EF4854535567658",
-  "authorized_relay": "0x3A78BDA3779a99780806d7F23EF4854535567658",
-  "operator": "0x3A78BDA3779a99780806d7F23EF4854535567658",
+  "contract_address": "0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50",
+  "deployer": "0x1f3df453C9Db1acb52B74CD26556019cE0F167Ab",
+  "authorized_relay": "0x1f3df453C9Db1acb52B74CD26556019cE0F167Ab",
+  "operator": "0x1f3df453C9Db1acb52B74CD26556019cE0F167Ab",
   "rpc_url": "https://studio.genlayer.com/api",
-  "explorer_url": "https://explorer-studio.genlayer.com/address/0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693",
-  "tx_hash": "0x4781049966b70c1e88a47878044d5ccd121f8f13ce6515047babfeae6a0ccad8",
+  "explorer_url": "https://explorer-studio.genlayer.com/address/0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50",
+  "tx_hash": "0x9a5610f636334efbb1c6b457e2f7ecc12c5d9edcb34b0d0de158dbc0d56f0ed9",
   "status": "DEPLOYED_ACTIVE",
-  "timestamp": "2026-09-10T14:51:14.773Z"
+  "timestamp": "2026-09-11T18:31:33.779Z"
 }

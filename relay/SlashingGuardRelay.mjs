@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 
 // Configuration
 const GENLAYER_RPC = process.env.GENLAYER_RPC || 'https://studio.genlayer.com/api';
-const GENLAYER_COURT = process.env.GENLAYER_COURT_ADDRESS || '0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693';
+const GENLAYER_COURT = process.env.GENLAYER_COURT_ADDRESS || '0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50';
 const EVM_RPC_URL = process.env.EVM_RPC_URL || 'https://sepolia.base.org';
 const EVM_VAULT_ADDRESS = process.env.EVM_VAULT_ADDRESS || '0x3Fa9b23f81902c34918239482910394817e12a89';
 const RELAY_PRIVATE_KEY = process.env.RELAY_PRIVATE_KEY || '';
@@ -91,7 +91,7 @@ async function processApprovedClaims() {
                     const balance = await evmPublicClient.getBalance({ address: viemAccount.address });
                     console.log(`  Relay Base Sepolia Balance: ${formatEther(balance)} ETH`);
 
-                    if (balance > parseEther('0.001')) {
+                    if (balance > parseEther('0.0005')) {
                         console.log(`  Broadcasting executeSlashingPayout to EVM Vault on Base Sepolia...`);
                         const policyIdBytes32 = keccak256(toHex(policyId));
                         const hash = await evmWalletClient.writeContract({
@@ -102,21 +102,26 @@ async function processApprovedClaims() {
                         });
                         console.log(`  Broadcasted EVM Tx Hash: ${hash}`);
                         const receipt = await evmPublicClient.waitForTransactionReceipt({ hash });
+                        if (receipt.status !== 'success') {
+                            throw new Error(`EVM payout transaction reverted on-chain (status: ${receipt.status})`);
+                        }
                         evmTxHash = receipt.transactionHash;
                         blockNumber = Number(receipt.blockNumber);
-                        console.log(`  EVM Payout Confirmed in Block #${blockNumber}!`);
+                        console.log(`  ✓ Authenticated EVM Payout Confirmed in Block #${blockNumber}! Tx: ${evmTxHash}`);
                     } else {
-                        console.log(`  Relay account has insufficient gas for live Base Sepolia broadcast.`);
-                        console.log(`  Synthesizing verified cryptographic settlement receipt for deterministic consensus...`);
-                        evmTxHash = keccak256(toHex(`SLASHINGGUARD_SETTLEMENT_${policyId}_${policy.staker_address}_${Date.now()}`));
-                        const currentBlock = await evmPublicClient.getBlockNumber();
-                        blockNumber = Number(currentBlock);
-                        console.log(`  Synthetic Receipt Hash: ${evmTxHash} at Block #${blockNumber}`);
+                        console.error(`  [ABORT] Relay account has insufficient gas for live Base Sepolia broadcast.`);
+                        console.error(`  No settlement will be submitted until valid on-chain payment occurs (Zero Fabrication Policy).`);
+                        continue;
                     }
                 } catch (evmErr) {
-                    console.warn(`  EVM Vault call note: ${evmErr.message || evmErr}`);
-                    evmTxHash = keccak256(toHex(`SLASHINGGUARD_FALLBACK_${policyId}_${Date.now()}`));
-                    blockNumber = 1234567;
+                    console.error(`  [ERROR] EVM Vault payout failed: ${evmErr.message || evmErr}`);
+                    console.error(`  Settlement aborted to prevent unauthenticated settlement submission.`);
+                    continue;
+                }
+
+                if (!evmTxHash || !blockNumber) {
+                    console.warn(`  Skipping settlement for ${policyId}: No verified EVM transaction receipt.`);
+                    continue;
                 }
 
                 // Finalize on GenLayer Court

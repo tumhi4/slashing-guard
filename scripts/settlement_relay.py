@@ -27,7 +27,7 @@ logging.basicConfig(
 
 # Configuration
 GENLAYER_RPC = os.getenv("GENLAYER_RPC", "https://studio.genlayer.com/api")
-GENLAYER_COURT_ADDRESS = os.getenv("GENLAYER_COURT_ADDRESS", "0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693")
+GENLAYER_COURT_ADDRESS = os.getenv("GENLAYER_COURT_ADDRESS", "0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50")
 EVM_RPC_URL = os.getenv("EVM_RPC_URL", "https://sepolia.base.org")
 EVM_VAULT_ADDRESS = os.getenv("EVM_VAULT_ADDRESS", "0x3Fa9b23f81902c34918239482910394817e12a89")
 RELAY_PRIVATE_KEY = os.getenv("RELAY_PRIVATE_KEY", "")
@@ -102,12 +102,11 @@ class SlashingGuardDualChainRelay:
             tx_hash = self.w3_evm.eth.send_raw_transaction(signed.rawTransaction)
             logging.info(f"EVM Tx sent: {tx_hash.hex()}")
             receipt = self.w3_evm.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+            if receipt.status != 1:
+                raise RuntimeError(f"EVM payout reverted on Base Sepolia: {tx_hash.hex()}")
             return {"status": receipt.status, "transactionHash": tx_hash.hex(), "blockNumber": receipt.blockNumber}
         else:
-            logging.info("Relay running in simulation mode (unfunded testnet account).")
-            mock_hash = "0x" + Web3.keccak(text=f"{policy_id}_{staker}_{time.time()}").hex()
-            block_num = self.w3_evm.eth.block_number
-            return {"status": 1, "transactionHash": mock_hash, "blockNumber": block_num}
+            raise RuntimeError(f"Relay account {self.relay_account.address} has 0 ETH on Base Sepolia. Payout aborted (Zero Fabrication Policy).")
 
     def process_approved_policies(self):
         logging.info(f"Scanning GenLayer Court: {GENLAYER_COURT_ADDRESS}...")

@@ -6,12 +6,9 @@
 
 ## 🔗 Verified On-Chain Deployments & Explorer Links
 
-- **GenLayer Production Intelligent Court (Live Relay Integrated)**:  
-  [`0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693`](https://explorer-studio.genlayer.com/address/0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693)  
-  *Fully settled end-to-end lifecycle verified on-chain: Registration -> Beacon Consensus -> CLAIM_APPROVED -> Autonomous Relay Settlement -> SETTLED.*
-- **GenLayer Reference Audit Court (Access Control Invariant Test)**:  
-  [`0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693`](https://explorer-studio.genlayer.com/address/0xf7C7a48e074a48b7E9AbC2738942c9f9C1E33693)  
-  *Demonstrates strict unauthorized caller blocking (`[ERR_UNAUTHORIZED_RELAY]`).*
+- **GenLayer Production Intelligent Court (Live Relay & Explorer Verified)**:  
+  [`0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50`](https://explorer-studio.genlayer.com/address/0x1aa80e21FDEc3B9Ff1440B49edD046Ffc12Ecb50)  
+  *Hardened with consensus-verified Base Sepolia payment evidence, connected live to Next.js frontend.*
 - **EVM Underwriting Vault Contract (Base Sepolia)**:  
   [`0x3Fa9b23f81902c34918239482910394817e12a89`](https://sepolia.basescan.org/address/0x3Fa9b23f81902c34918239482910394817e12a89)  
   *Solidity 0.8.20 vault managing underwriting reserves, premium deposits, and parametric claim disbursements.*
